@@ -13,6 +13,12 @@ from voice import Voice
 # Keep alive Render
 app = Flask('')
 @app.route('/')
+def home_old():
+    return 'Nguyez FF + Zing + YTMusic Online!'
+@app.route('/healthz')
+def healthz():
+    return 'OK', 200
+@app.route('/__old')
 def home(): return "Nguyez FF + Zing + YTMusic Online!"
 Thread(target=lambda: app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 10000))), daemon=True).start()
 
