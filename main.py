@@ -2,8 +2,8 @@ import os, discord
 from discord.ext import commands
 from flask import Flask
 from threading import Thread
-from all_app_music import AllAppMusicDiscord
-music = AllAppMusicDiscord()
+from all_app_music import AllPlayersDiscord
+music = AllPlayersDiscord()
 
 # Import 2 file Sen đã có
 from zing_mp3 import ZingDiscord
