@@ -1,23 +1,116 @@
-import os, discord
-from discord.ext import commands
-from flask import Flask
-from threading import Thread
-from all_app_music import AllPlayersDiscord
-music = AllPlayersDiscord()
-
+import os
+import asyncio
 import discord
 from discord import app_commands
+from discord.ext import commands
+from yt_dlp import YoutubeDL
+import datetime
+from flask import Flask
+from threading import Thread
 
-# Nhớ có dòng này ở trên cùng
-# bot = commands.Bot(...)
+# ===== Keep alive cho Render =====
+app = Flask('')
+@app.route('/')
+def home():
+    return 'Meta AI x Spotify Bot Online!'
+@app.route('/healthz')
+def healthz():
+    return 'OK', 200
+Thread(target=lambda: app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 10000))), daemon=True).start()
 
+# ===== Bot setup - PHẢI ĐỂ TRƯỚC MỌI @bot.event =====
+intents = discord.Intents.all()
+intents.message_content = True
+intents.voice_states = True
+bot = commands.Bot(command_prefix="!", intents=intents)
+
+YTDL_OPTIONS = {
+    'format': 'bestaudio/best',
+    'quiet': True,
+    'no_warnings': True,
+    'default_search': 'ytsearch',
+    'source_address': '0.0.0.0',
+    'noplaylist': True,
+}
+FFMPEG_OPTIONS = {
+    'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5',
+    'options': '-vn -b:a 192k'
+}
+ytdl = YoutubeDL(YTDL_OPTIONS)
+
+class Voice:
+    def __init__(self, bot):
+        self.bot = bot
+        self.queue = {}
+    def get_queue(self, gid):
+        if gid not in self.queue:
+            self.queue[gid] = []
+        return self.queue[gid]
+    async def join(self, interaction):
+        if not interaction.user.voice:
+            await interaction.response.send_message("❌ Vào voice trước Sen ơi!", ephemeral=True)
+            return None
+        channel = interaction.user.voice.channel
+        vc = interaction.guild.voice_client or await channel.connect(self_deaf=False, self_mute=False)
+        if vc.channel != channel:
+            await vc.move_to(channel)
+        try:
+            await interaction.guild.me.edit(mute=False, deafen=False)
+        except:
+            pass
+        return vc
+    def search(self, query):
+        info = ytdl.extract_info(f"ytsearch:{query}", download=False)
+        if 'entries' in info:
+            info = info['entries'][0]
+        return {'url': info['url'], 'title': info['title'], 'webpage_url': info.get('webpage_url'), 'thumbnail': info.get('thumbnail'), 'duration': info.get('duration',0)}
+    async def play_next(self, guild):
+        q = self.get_queue(guild.id)
+        vc = guild.voice_client
+        if not q or not vc: return
+        url, title, thumb = q.pop(0)
+        source = discord.FFmpegPCMAudio(url, **FFMPEG_OPTIONS)
+        def after(e):
+            coro = self.play_next(guild)
+            asyncio.run_coroutine_threadsafe(coro, self.bot.loop)
+        vc.play(source, after=after)
+        try: await guild.me.edit(mute=False, deafen=False)
+        except: pass
+    async def play(self, interaction, query):
+        if not interaction.response.is_done():
+            await interaction.response.defer()
+        vc = await self.join(interaction)
+        if not vc: return
+        result = self.search(query)
+        q = self.get_queue(interaction.guild.id)
+        q.append((result['url'], result['title'], result.get('thumbnail')))
+        if not vc.is_playing():
+            await self.play_next(interaction.guild)
+            embed = discord.Embed(title="🎶 Đang Phát", description=f"**{result['title']}**", color=0x0064FF, timestamp=datetime.datetime.now())
+            if result.get('thumbnail'): embed.set_thumbnail(url=result['thumbnail'])
+            embed.set_footer(text="Powered by Meta AI x Spotify Bot", icon_url="https://upload.wikimedia.org/wikipedia/commons/a/ab/Meta-Logo.png")
+            await interaction.followup.send(embed=embed)
+        else:
+            await interaction.followup.send(f"✅ Đã thêm vào hàng đợi: **{result['title']}**")
+
+voice = Voice(bot)
+
+# ===== Events =====
 @bot.event
 async def on_ready():
     await bot.tree.sync()
-    print(f"PN super đã sync lệnh /mic rồi!")
+    print(f"Meta AI x Spotify Bot online! {bot.user}")
 
-@app_commands.guilds(discord.Object(id=YOUR_GUILD_ID)) # Xóa dòng này nếu muốn global
-@bot.tree.command(name="mic", description="Auto bật/tắt mic cho bot - PN super")
+@bot.event
+async def on_voice_state_update(member, before, after):
+    if member == bot.user and after.channel:
+        try:
+            await member.edit(mute=False, deafen=False)
+        except:
+            pass
+
+# ===== Slash Commands =====
+@bot.tree.command(name="mic", description="Auto bật/tắt mic cho bot")
 @app_commands.describe(mode="Chọn on/off")
 @app_commands.choices(mode=[
     app_commands.Choice(name="Bật mic 🎙️", value="on"),
@@ -27,94 +120,34 @@ async def mic_slash(interaction: discord.Interaction, mode: str):
     if not interaction.user.voice:
         await interaction.response.send_message("Sen vào voice đi đã!", ephemeral=True)
         return
-
     if interaction.guild.voice_client is None:
-        await interaction.user.voice.channel.connect()
-    
-    # AUTO BẬT MIC QUAN TRỌNG NHẤT
-    await interaction.guild.me.edit(mute=False, deafen=False)
-
+        await interaction.user.voice.channel.connect(self_deaf=False, self_mute=False)
     if mode == "on":
+        await interaction.guild.me.edit(mute=False, deafen=False)
         await interaction.response.send_message("🎙️ `/mic` Đã auto BẬT MIC rồi Sen ơi! Yè ye!")
     else:
         await interaction.guild.me.edit(mute=True)
         await interaction.response.send_message("🔇 Đã tắt mic!")
 
-# Auto fix khi bot bị mute
-@bot.event
-async def on_voice_state_update(member, before, after):
-    if member == bot.user and after.channel:
-        await member.edit(mute=False, deafen=False)
-
-# Import 2 file Sen đã có
-from zing_mp3 import ZingDiscord
-from ytmusic import YTMusicDiscord
-from voice import Voice
-
-# Keep alive Render
-app = Flask('')
-@app.route('/')
-def home_old():
-    return 'Nguyez FF + Zing + YTMusic Online!'
-@app.route('/healthz')
-def healthz():
-    return 'OK', 200
-@app.route('/__old')
-def home(): return "Nguyez FF + Zing + YTMusic Online!"
-Thread(target=lambda: app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 10000))), daemon=True).start()
-
-intents = discord.Intents.default()
-intents.message_content = True
-intents.voice_states = True
-bot = commands.Bot(command_prefix="/", intents=intents)
-
-zing = ZingDiscord()
-ytm = YTMusicDiscord()
-voice = Voice(bot)
-
-print(f"Zing: {zing.discord()}")
-print(f"YTMusic: {ytm.discord()}")
-
-@bot.event
-async def on_ready():
-    await bot.tree.sync()
-    print(f"Bot {bot.user} online với Zing + YTMusic!")
-
-@bot.tree.command(name="play", description="Phát nhạc Zing MP3 + Youtube Music (không sợ bản quyền)")
+@bot.tree.command(name="play", description="Phát nhạc")
 async def play_cmd(interaction: discord.Interaction, query: str):
-    if not interaction.user.voice:
-        return await interaction.response.send_message("❌ Vào voice trước Sen ơi!", ephemeral=True)
-    
-    await interaction.response.defer()
-    vc = interaction.guild.voice_client or await interaction.user.voice.channel.connect()
+    await voice.play(interaction, query)
 
-    # 1. Thử Zing trước
-    result = zing.search(query)
-    source_name = "Zing MP3"
-    
-    # 2. Nếu không có thì thử YTMusic
-    if not result:
-        result = ytm.search(query)
-        source_name = "Youtube Music"
-    
-    # 3. Nếu vẫn không có thì fallback YouTube thường
-    if not result:
-        result = voice.search(query)
-        source_name = "YouTube"
+@bot.tree.command(name="skip", description="Skip bài")
+async def skip_cmd(interaction: discord.Interaction):
+    vc = interaction.guild.voice_client
+    if vc and vc.is_playing():
+        vc.stop()
+        await interaction.response.send_message("⏭️ Đã skip!")
+    else:
+        await interaction.response.send_message("❌ Không có gì đang phát!", ephemeral=True)
 
-    if not result:
-        return await interaction.followup.send("❌ Không tìm thấy bài này!")
-
-    # Phát
-    try:
-        audio_url = result.get('stream_url') or result.get('url')
-        # Nếu là Zing/YTMusic thì vẫn dùng yt-dlp để lấy audio
-        from play import PlayView
-        await voice.play(interaction, result['title'] + " " + result.get('artist',''))
-        
-        embed = discord.Embed(title=f"🎶 Đang phát từ {source_name}", description=f"**{result['title']}** - {result.get('artist','')}", color=0x00FF7F)
-        await interaction.followup.send(embed=embed)
-    except Exception as e:
-        await interaction.followup.send(f"Lỗi phát: {e}")
+@bot.tree.command(name="stop", description="Dừng bot")
+async def stop_cmd(interaction: discord.Interaction):
+    q = voice.get_queue(interaction.guild.id)
+    q.clear()
+    vc = interaction.guild.voice_client
+    if vc: await vc.disconnect()
+    await interaction.response.send_message("🛑 Đã dừng!")
 
 bot.run(os.getenv("DISCORD_TOKEN"))
