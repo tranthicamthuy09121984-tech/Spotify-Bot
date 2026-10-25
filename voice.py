@@ -2,8 +2,61 @@ import discord
 import asyncio
 from yt_dlp import YoutubeDL
 import datetime
+from discord.ext import commands
+import os
+
+intents = discord.Intents.all()
+intents.message_content = True
+bot = commands.Bot(command_prefix="!", intents=intents)
+
+ROLE_BOT = {
+    'administrator': True
+}
+
+COMMAND_BOT = {
+    'bot': True,
+    'application_commands': True
+}
 
 YTDL_OPTIONS = {
+    'format': 'bestaudio/best',
+    'quiet': True,
+    'no_warnings': True,
+    'default_search': 'ytsearch',
+    'source_address': '0.0.0.0',
+    'noplaylist': True,
+}
+
+ZING_MP3_OPTIONS = {
+    'format': 'bestaudio/best',
+    'quiet': True,
+    'no_warnings': True,
+    'default_search': 'ytsearch',
+    'source_address': '0.0.0.0',
+    'noplaylist': True,
+}
+
+APPLE_MUSIC_OPTIONS = {
+    'format': 'bestaudio/best',
+    'quiet': True,
+    'no_warnings': True,
+    'default_search': 'ytsearch',
+    'source_address': '0.0.0.0',
+    'noplaylist': True,
+}
+
+WINDOWS_MEDIA_PLAYER_OPTIONS = {
+    'format': 'bestaudio/best',
+    'quiet': True,
+    'no_warnings': True,
+    'default_search': 'ytsearch',
+    'source_address': '0.0.0.0',
+    'noplaylist': True,
+}
+
+NCT = "NhacCuaTui"
+
+NCT_OPTIONS = {
     'format': 'bestaudio/best',
     'quiet': True,
     'no_warnings': True,
@@ -23,7 +76,7 @@ VOICE_CONFIG = {
     'voice_discord': True,
     'allow_mic': True,
     'auto_mic': True,
-    'mic: True,
+    'mic': True,
     'powered_by': 'Meta AI x Spotify Bot'
 }
 
@@ -51,10 +104,8 @@ class Voice:
             embed.set_footer(text="Powered by Meta AI", icon_url="https://upload.wikimedia.org/wikipedia/commons/a/ab/Meta-Logo.png")
             await interaction.response.send_message(embed=embed, ephemeral=True)
             return None
-        
         channel = interaction.user.voice.channel
         vc = interaction.guild.voice_client
-        
         if not vc:
             embed = discord.Embed(description=f"⚡ **Spotify Bot** đang kết nối tới `{channel.name}`...", color=0x0064FF)
             try:
@@ -65,7 +116,6 @@ class Voice:
             vc = await channel.connect(self_deaf=False, self_mute=False)
         elif vc.channel != channel:
             await vc.move_to(channel)
-
         try:
             await interaction.guild.me.edit(mute=False, deafen=False)
         except:
@@ -91,13 +141,11 @@ class Voice:
         except Exception as e:
             print(f"[Meta AI Error] FFMPEG: {e}")
             return await self.play_next(guild)
-
         def after_play(error):
             if error:
                 print(f"[Meta AI Error] Phát lỗi: {error}")
             coro = self.play_next(guild)
             asyncio.run_coroutine_threadsafe(coro, self.bot.loop)
-
         self.now_playing[guild.id] = (title, thumb)
         vc.play(source, after=after_play)
         try:
@@ -121,38 +169,27 @@ class Voice:
                 embed = discord.Embed(title="❌ Meta AI Search Failed", description=f"Không tìm thấy: {e}", color=0xFF0000)
                 embed.set_footer(text="Powered by Meta AI", icon_url="https://upload.wikimedia.org/wikipedia/commons/a/ab/Meta-Logo.png")
                 return await interaction.followup.send(embed=embed)
-
-        q = self.get_queue(interaction.guild.id)
-        q.append((result['url'], result['title'], result.get('thumbnail')))
-
-        if not vc.is_playing() and not vc.is_paused():
-            await self.play_next(interaction.guild)
-            embed = discord.Embed(
-                title="🎶 Meta AI và Spotify Bot Đang Phát",
-                description=f"**{result['title']}**",
-                color=0x0064FF,
-                timestamp=datetime.datetime.now()
-            )
-            if result.get('thumbnail'):
-                embed.set_thumbnail(url=result['thumbnail'])
-            embed.set_image(url="https://i.imgur.com/wv6b8aP.gif")
-            embed.add_field(name="🤖 AI Engine", value="Meta Llama Search", inline=True)
-            embed.add_field(name="🎙️ Smart Mic", value="Auto ON ✅", inline=True)
-            embed.add_field(name="⏱️ Duration", value=f"{result.get('duration',0)//60}:{result.get('duration',0)%60:02d}", inline=True)
-            embed.set_footer(text="⚡ Powered by Meta AI x Spotify Bot I /meta", icon_url="https://upload.wikimedia.org/wikipedia/commons/a/ab/Meta-Logo.png")
-            await interaction.followup.send(embed=embed)
-        else:
-            embed = discord.Embed(
-                title="✅ Đã Thêm Vào Hàng Đợi",
-                description=f"**{result['title']}**",
-                color=0x00FF7F
-            )
-            embed.add_field(name="Vị trí", value=f"#{len(q)}", inline=True)
-            embed.add_field(name="Powered by", value="Meta AI x Spotify Bot", inline=True)
-            if result.get('thumbnail'):
-                embed.set_thumbnail(url=result['thumbnail'])
-            embed.set_footer(text="Meta AI x Spotify Bot Queue System", icon_url="https://upload.wikimedia.org/wikipedia/commons/a/ab/Meta-Logo.png")
-            await interaction.followup.send(embed=embed)
+            q = self.get_queue(interaction.guild.id)
+            q.append((result['url'], result['title'], result.get('thumbnail')))
+            if not vc.is_playing() and not vc.is_paused():
+                await self.play_next(interaction.guild)
+                embed = discord.Embed(title="🎶 Meta AI và Spotify Bot Đang Phát", description=f"**{result['title']}**", color=0x0064FF, timestamp=datetime.datetime.now())
+                if result.get('thumbnail'):
+                    embed.set_thumbnail(url=result['thumbnail'])
+                embed.set_image(url="https://i.imgur.com/wv6b8aP.gif")
+                embed.add_field(name="🤖 AI Engine", value="Meta Llama Search", inline=True)
+                embed.add_field(name="🎙️ Smart Mic", value="Auto ON ✅", inline=True)
+                embed.add_field(name="⏱️ Duration", value=f"{result.get('duration',0)//60}:{result.get('duration',0)%60:02d}", inline=True)
+                embed.set_footer(text="⚡ Powered by Meta AI x Spotify Bot I /meta", icon_url="https://upload.wikimedia.org/wikipedia/commons/a/ab/Meta-Logo.png")
+                await interaction.followup.send(embed=embed)
+            else:
+                embed = discord.Embed(title="✅ Đã Thêm Vào Hàng Đợi", description=f"**{result['title']}**", color=0x00FF7F)
+                embed.add_field(name="Vị trí", value=f"#{len(q)}", inline=True)
+                embed.add_field(name="Powered by", value="Meta AI x Spotify Bot", inline=True)
+                if result.get('thumbnail'):
+                    embed.set_thumbnail(url=result['thumbnail'])
+                embed.set_footer(text="Meta AI x Spotify Bot Queue System", icon_url="https://upload.wikimedia.org/wikipedia/commons/a/ab/Meta-Logo.png")
+                await interaction.followup.send(embed=embed)
 
     async def skip(self, interaction):
         vc = interaction.guild.voice_client
@@ -191,3 +228,24 @@ class Voice:
             await interaction.response.send_message("▶️ **Spotify Bot** tiếp tục phát!")
         else:
             await interaction.response.send_message("❌ Bot không bị pause!")
+
+voice = Voice(bot)
+
+@bot.event
+async def on_ready():
+    print("Meta AI x Spotify Bot online!")
+    await bot.tree.sync()
+
+@bot.tree.command(name="play", description="Phát nhạc Meta AI")
+async def play_cmd(interaction: discord.Interaction, query: str):
+    await voice.play(interaction, query)
+
+@bot.tree.command(name="skip", description="Skip bài")
+async def skip_cmd(interaction: discord.Interaction):
+    await voice.skip(interaction)
+
+@bot.tree.command(name="stop", description="Dừng bot")
+async def stop_cmd(interaction: discord.Interaction):
+    await voice.stop(interaction)
+
+bot.run(os.getenv("DISCORD_TOKEN"))
