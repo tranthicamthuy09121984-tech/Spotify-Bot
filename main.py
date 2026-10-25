@@ -5,6 +5,47 @@ from threading import Thread
 from all_app_music import AllPlayersDiscord
 music = AllPlayersDiscord()
 
+import discord
+from discord import app_commands
+
+# Nhớ có dòng này ở trên cùng
+# bot = commands.Bot(...)
+
+@bot.event
+async def on_ready():
+    await bot.tree.sync()
+    print(f"PN super đã sync lệnh /mic rồi!")
+
+@app_commands.guilds(discord.Object(id=YOUR_GUILD_ID)) # Xóa dòng này nếu muốn global
+@bot.tree.command(name="mic", description="Auto bật/tắt mic cho bot - PN super")
+@app_commands.describe(mode="Chọn on/off")
+@app_commands.choices(mode=[
+    app_commands.Choice(name="Bật mic 🎙️", value="on"),
+    app_commands.Choice(name="Tắt mic 🔇", value="off")
+])
+async def mic_slash(interaction: discord.Interaction, mode: str):
+    if not interaction.user.voice:
+        await interaction.response.send_message("Sen vào voice đi đã!", ephemeral=True)
+        return
+
+    if interaction.guild.voice_client is None:
+        await interaction.user.voice.channel.connect()
+    
+    # AUTO BẬT MIC QUAN TRỌNG NHẤT
+    await interaction.guild.me.edit(mute=False, deafen=False)
+
+    if mode == "on":
+        await interaction.response.send_message("🎙️ `/mic` Đã auto BẬT MIC rồi Sen ơi! Yè ye!")
+    else:
+        await interaction.guild.me.edit(mute=True)
+        await interaction.response.send_message("🔇 Đã tắt mic!")
+
+# Auto fix khi bot bị mute
+@bot.event
+async def on_voice_state_update(member, before, after):
+    if member == bot.user and after.channel:
+        await member.edit(mute=False, deafen=False)
+
 # Import 2 file Sen đã có
 from zing_mp3 import ZingDiscord
 from ytmusic import YTMusicDiscord
