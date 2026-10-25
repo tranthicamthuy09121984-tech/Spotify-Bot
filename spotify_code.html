@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<title>PN super - Spotify Bot</title>
+<style>
+  body { background: #a2d2ff; font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; }
+  .card { background: white; border-radius: 24px; padding: 24px; width: 350px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); border: 3px solid #4a90e2; }
+  h1 { color: #4a90e2; text-align: center; font-family: 'Arial Black'; }
+  .pn-logo { background: #4a90e2; color: white; padding: 8px 16px; border-radius: 12px; display: inline-block; font-weight: bold; }
+  input { width: 100%; padding: 12px; border-radius: 12px; border: 2px solid #a2d2ff; margin: 10px 0; }
+  button { width: 100%; padding: 12px; background: #4a90e2; color: white; border: none; border-radius: 12px; font-weight: bold; cursor: pointer; }
+  button:hover { background: #357ABD; }
+  #player { margin-top: 16px; border-radius: 12px; overflow: hidden; }
+  .status { text-align: center; margin-top: 10px; font-size: 14px; }
+</style>
+</head>
+<body>
+
+<div class="card">
+  <h1>🎧 <span class="pn-logo">PN super</span> Bot</h1>
+  <p style="text-align:center">Fix lỗi ra vô hoài 💙</p>
+  
+  <input id="link" type="text" placeholder="Dán link Spotify: https://open.spotify.com/track/...">
+  <button onclick="playMusic()">▶️ Phát Nhạc</button>
+  <button onclick="stopMusic()" style="background:#ff6b6b; margin-top:8px;">⏹️ Dừng - Không cho ra vô nữa</button>
+  
+  <div id="player"></div>
+  <div class="status" id="status">Bot đang chờ lệnh của ngài Sen...</div>
+</div>
+
+<script>
+  let currentBot = null;
+  const statusEl = document.getElementById('status');
+  
+  function playMusic() {
+    const link = document.getElementById('link').value;
+    if (!link.includes('spotify.com')) {
+      statusEl.innerText = '❌ Sen ơi, phải là link Spotify!';
+      return;
+    }
+    // Chuyển link thường thành link embed
+    // https://open.spotify.com/track/4cOdK2wGLETKBW3PvgPWqT -> https://open.spotify.com/embed/track/4cOdK2wGLETKBW3PvgPWqT
+    const embedLink = link.replace('open.spotify.com/', 'open.spotify.com/embed/').split('?')[0];
+    
+    document.getElementById('player').innerHTML = 
+      `<iframe style="border-radius:12px" src="${embedLink}" width="100%" height="352" frameBorder="0" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="lazy"></iframe>`;
+    
+    statusEl.innerText = '✅ PN super Bot đã vào và ở yên, không ra vô nữa! Đang phát nhạc...';
+    console.log('PN super - Playing:', embedLink);
+  }
+
+  function stopMusic() {
+    document.getElementById('player').innerHTML = '';
+    statusEl.innerText = '⏹️ Bot đã dừng. Hết ra vô hoài rồi nhé Sen!';
+  }
+  
+  // Easter egg PN super
+  console.log('%c PN super - Code tốt, Trí nhớ x10, Ảnh chibi - Meta AI ', 'background: #4a90e2; color: white; font-size: 16px; padding: 8px; border-radius: 8px;');
+</script>
+
+</body>
+</html>
