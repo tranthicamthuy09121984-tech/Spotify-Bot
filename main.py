@@ -1,153 +1,95 @@
+# utf-8
 import os
-import asyncio
 import discord
-from discord import app_commands
 from discord.ext import commands
-from yt_dlp import YoutubeDL
-import datetime
+from discord import app_commands
 from flask import Flask
 from threading import Thread
+import asyncio
 
-# ===== Keep alive cho Render =====
+# Import module của sen
+from voice import Voice 
+
 app = Flask('')
 @app.route('/')
-def home():
-    return 'Meta AI x Spotify Bot Online!'
+def home(): return "Nguyez FF + Zing + YTMusic Online!"
 @app.route('/healthz')
-def healthz():
-    return 'OK', 200
+def healthz(): return "OK", 200
+
 Thread(target=lambda: app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 10000))), daemon=True).start()
 
-# ===== Bot setup - PHẢI ĐỂ TRƯỚC MỌI @bot.event =====
-intents = discord.Intents.all()
+intents = discord.Intents.default()
 intents.message_content = True
 intents.voice_states = True
-bot = commands.Bot(command_prefix="!", intents=intents)
+bot = commands.Bot(command_prefix="/", intents=intents)
 
-YTDL_OPTIONS = {
-    'format': 'bestaudio/best',
-    'quiet': True,
-    'no_warnings': True,
-    'default_search': 'ytsearch',
-    'source_address': '0.0.0.0',
-    'noplaylist': True,
-}
-FFMPEG_OPTIONS = {
-    'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5',
-    'options': '-vn -b:a 192k'
-}
-ytdl = YoutubeDL(YTDL_OPTIONS)
+voice_handler = Voice(bot)
 
-class Voice:
-    def __init__(self, bot):
-        self.bot = bot
-        self.queue = {}
-    def get_queue(self, gid):
-        if gid not in self.queue:
-            self.queue[gid] = []
-        return self.queue[gid]
-    async def join(self, interaction):
-        if not interaction.user.voice:
-            await interaction.response.send_message("❌ Vào voice trước Sen ơi!", ephemeral=True)
-            return None
-        channel = interaction.user.voice.channel
-        vc = interaction.guild.voice_client or await channel.connect(self_deaf=False, self_mute=False)
-        if vc.channel != channel:
-            await vc.move_to(channel)
-        try:
-            await interaction.guild.me.edit(mute=False, deafen=False)
-        except:
-            pass
-        return vc
-    def search(self, query):
-        info = ytdl.extract_info(f"ytsearch:{query}", download=False)
-        if 'entries' in info:
-            info = info['entries'][0]
-        return {'url': info['url'], 'title': info['title'], 'webpage_url': info.get('webpage_url'), 'thumbnail': info.get('thumbnail'), 'duration': info.get('duration',0)}
-    async def play_next(self, guild):
-        q = self.get_queue(guild.id)
-        vc = guild.voice_client
-        if not q or not vc: return
-        url, title, thumb = q.pop(0)
-        source = discord.FFmpegPCMAudio(url, **FFMPEG_OPTIONS)
-        def after(e):
-            coro = self.play_next(guild)
-            asyncio.run_coroutine_threadsafe(coro, self.bot.loop)
-        vc.play(source, after=after)
-        try: await guild.me.edit(mute=False, deafen=False)
-        except: pass
-    async def play(self, interaction, query):
-        if not interaction.response.is_done():
-            await interaction.response.defer()
-        vc = await self.join(interaction)
-        if not vc: return
-        result = self.search(query)
-        q = self.get_queue(interaction.guild.id)
-        q.append((result['url'], result['title'], result.get('thumbnail')))
-        if not vc.is_playing():
-            await self.play_next(interaction.guild)
-            embed = discord.Embed(title="🎶 Đang Phát", description=f"**{result['title']}**", color=0x0064FF, timestamp=datetime.datetime.now())
-            if result.get('thumbnail'): embed.set_thumbnail(url=result['thumbnail'])
-            embed.set_footer(text="Powered by Meta AI x Spotify Bot", icon_url="https://upload.wikimedia.org/wikipedia/commons/a/ab/Meta-Logo.png")
-            await interaction.followup.send(embed=embed)
-        else:
-            await interaction.followup.send(f"✅ Đã thêm vào hàng đợi: **{result['title']}**")
-
-voice = Voice(bot)
-
-# ===== Events =====
 @bot.event
 async def on_ready():
     await bot.tree.sync()
-    print(f"Meta AI x Spotify Bot online! {bot.user}")
+    print(f"Bot {bot.user} online! Meo!")
 
-@bot.event
-async def on_voice_state_update(member, before, after):
-    if member == bot.user and after.channel:
-        try:
-            await member.edit(mute=False, deafen=False)
-        except:
-            pass
-
-# ===== Slash Commands =====
-@bot.tree.command(name="mic", description="Auto bật/tắt mic cho bot")
-@app_commands.describe(mode="Chọn on/off")
+@bot.tree.command(name="mic", description="Tự động bật/tắt mic bot")
 @app_commands.choices(mode=[
-    app_commands.Choice(name="Bật mic 🎙️", value="on"),
-    app_commands.Choice(name="Tắt mic 🔇", value="off")
+    app_commands.Choice(name="Bật mic", value="on"),
+    app_commands.Choice(name="Tắt mic", value="off")
 ])
 async def mic_slash(interaction: discord.Interaction, mode: str):
     if not interaction.user.voice:
-        await interaction.response.send_message("Sen vào voice đi đã!", ephemeral=True)
+        await interaction.response.send_message("Vào voice trước bạn ơi!", ephemeral=True)
         return
-    if interaction.guild.voice_client is None:
-        await interaction.user.voice.channel.connect(self_deaf=False, self_mute=False)
+    
+    vc = interaction.guild.voice_client
+    if vc is None:
+        vc = await interaction.user.voice.channel.connect(self_deaf=False, self_mute=False)
+    
+    # Đây mới là chỗ quan trọng để mở mic phát nhạc
     if mode == "on":
         await interaction.guild.me.edit(mute=False, deafen=False)
-        await interaction.response.send_message("🎙️ `/mic` Đã auto BẬT MIC rồi Sen ơi! Yè ye!")
+        # Đảm bảo voice client cũng không tự mute
+        vc = interaction.guild.voice_client
+        if vc:
+            await vc.guild.change_voice_state(channel=vc.channel, self_mute=False, self_deaf=False)
+        await interaction.response.send_message("Đã bật mic rồi sen ơi! 🔊", ephemeral=True)
     else:
-        await interaction.guild.me.edit(mute=True)
-        await interaction.response.send_message("🔇 Đã tắt mic!")
+        await interaction.guild.me.edit(mute=True, deafen=False)
+        await interaction.response.send_message("Đã tắt mic!", ephemeral=True)
 
-@bot.tree.command(name="play", description="Phát nhạc")
+@bot.tree.command(name="play", description="Phát nhạc Zing MP3 + Youtube Music")
 async def play_cmd(interaction: discord.Interaction, query: str):
-    await voice.play(interaction, query)
+    if not interaction.user.voice:
+        return await interaction.response.send_message("Vào voice trước bạn ơi!", ephemeral=True)
+    
+    await interaction.response.defer()
 
-@bot.tree.command(name="skip", description="Skip bài")
-async def skip_cmd(interaction: discord.Interaction):
     vc = interaction.guild.voice_client
-    if vc and vc.is_playing():
-        vc.stop()
-        await interaction.response.send_message("⏭️ Đã skip!")
-    else:
-        await interaction.response.send_message("❌ Không có gì đang phát!", ephemeral=True)
+    if vc is None:
+        vc = await interaction.user.voice.channel.connect(self_deaf=False, self_mute=False)
+    
+    # Luôn mở mic trước khi phát
+    await interaction.guild.me.edit(mute=False, deafen=False)
+    await vc.guild.change_voice_state(channel=vc.channel, self_mute=False, self_deaf=False)
 
-@bot.tree.command(name="stop", description="Dừng bot")
+    try:
+        # voice_handler.search của sen phải trả về url audio, không phải title
+        result = await voice_handler.search_and_get_url(query)
+        if not result:
+            return await interaction.followup.send(f"Không tìm thấy: {query}")
+
+        await voice_handler.play(vc, result['url'])
+        await interaction.followup.send(f"Đang phát: **{result['title']}** 🎵")
+    except Exception as e:
+        print(e)
+        await interaction.followup.send(f"Lỗi phát nhạc: {e}")
+
+@bot.tree.command(name="stop", description="Dừng nhạc và out voice")
 async def stop_cmd(interaction: discord.Interaction):
-    q = voice.get_queue(interaction.guild.id)
-    q.clear()
     vc = interaction.guild.voice_client
-    if vc: await vc.disconnect()
-    await interaction.response.send_message("🛑 Đã dừng!")
+    if vc:
+        await vc.disconnect()
+        await interaction.response.send_message("Bye bạn, out đây!")
+    else:
+        await interaction.response.send_message("Bot có ở trong voice đâu!", ephemeral=True)
 
 bot.run(os.getenv("DISCORD_TOKEN"))
